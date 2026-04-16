@@ -184,6 +184,56 @@ const css = `
   /* Main panel */
   .panel { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
 
+  /* Cache list view */
+  .cache-list-panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  .cache-list-toolbar {
+    display: flex; gap: 8px; align-items: center; padding: 14px 16px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap;
+  }
+  @media (min-width: 641px) { .cache-list-toolbar { padding: 14px 24px; } }
+  .filter-input {
+    flex: 1; min-width: 120px; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); font-family: 'Space Mono', monospace; font-size: 11px;
+    padding: 7px 10px; border-radius: var(--radius); outline: none;
+    transition: border-color 0.15s;
+  }
+  .filter-input:focus { border-color: var(--accent2); }
+  .filter-input::placeholder { color: var(--muted); }
+  .sort-select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text2);
+    font-family: 'Space Mono', monospace; font-size: 10px; padding: 7px 8px;
+    border-radius: var(--radius); outline: none; cursor: pointer; flex-shrink: 0;
+  }
+  .sort-select:focus { border-color: var(--accent2); }
+  .cache-table-wrap { flex: 1; overflow-y: auto; }
+  .cache-table-wrap::-webkit-scrollbar { width: 4px; }
+  .cache-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .cache-table { width: 100%; border-collapse: collapse; }
+  .cache-table thead { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  .cache-table th {
+    text-align: left; font-family: 'Unbounded', sans-serif; font-size: 8px;
+    font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border);
+    white-space: nowrap; cursor: pointer; user-select: none;
+  }
+  .cache-table th:hover { color: var(--text2); }
+  .cache-table th.sorted { color: var(--accent); }
+  .cache-table td {
+    padding: 11px 12px; border-bottom: 1px solid var(--border);
+    font-size: 12px; vertical-align: middle;
+  }
+  .cache-table tr { cursor: pointer; transition: background 0.12s; }
+  .cache-table tbody tr:hover { background: var(--surface); }
+  .cache-table tbody tr.active { background: rgba(200,245,64,0.06); border-left: 2px solid var(--accent); }
+  .cache-table tbody tr:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .ct-name { font-weight: 700; color: var(--text); line-height: 1.3; }
+  .ct-code { font-size: 9px; color: var(--muted); font-style: italic; margin-top: 2px; }
+  .ct-num { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 11px; color: var(--accent); text-align: center; }
+  .ct-center { text-align: center; }
+  .cache-count { font-size: 10px; color: var(--muted); padding: 6px 16px 0; flex-shrink: 0; }
+  @media (min-width: 641px) { .cache-count { padding: 6px 24px 0; } }
+  @media (max-width: 500px) { .col-size, .col-type { display: none; } }
+
   .panel-empty {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
     color: var(--muted); gap: 12px;
@@ -358,6 +408,8 @@ export default function App() {
   const [geolocating, setGeolocating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [keySaved, setKeySaved] = useState(false);
+  const [cacheFilter, setCacheFilter] = useState("");
+  const [cacheSort, setCacheSort] = useState("name"); // name | difficulty | terrain | type | size2
 
   // Persist Anthropic key to localStorage
   useEffect(() => {
@@ -697,15 +749,101 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
 
           {/* Main panel */}
           <div className="panel">
-            {!selected && (
+            {!selected && caches.length === 0 && (
               <div className="panel-empty">
                 <div className="panel-empty-icon">🗺</div>
-                <div className="panel-empty-text">SELECT A CACHE TO EXPLORE</div>
+                <div className="panel-empty-text">SEARCH FOR CACHES</div>
                 <div style={{color:"var(--muted)",fontSize:"10px",maxWidth:"260px",textAlign:"center"}}>
-                  Search for caches in a region, then click one to load logs and generate AI-powered fun facts.
+                  Enter your OKAPI key, pick an area, and hit Search Caches.
                 </div>
               </div>
             )}
+
+            {!selected && caches.length > 0 && (() => {
+              const filtered = caches.filter(c =>
+                !cacheFilter ||
+                c.name?.toLowerCase().includes(cacheFilter.toLowerCase()) ||
+                c.code?.toLowerCase().includes(cacheFilter.toLowerCase()) ||
+                c.type?.toLowerCase().includes(cacheFilter.toLowerCase())
+              );
+              const sorted = [...filtered].sort((a, b) => {
+                if (cacheSort === "difficulty") return (a.difficulty||0) - (b.difficulty||0);
+                if (cacheSort === "terrain")    return (a.terrain||0)    - (b.terrain||0);
+                if (cacheSort === "type")       return (a.type||"").localeCompare(b.type||"");
+                if (cacheSort === "size2")      return (a.size2||"").localeCompare(b.size2||"");
+                return (a.name||"").localeCompare(b.name||"");
+              });
+              return (
+                <div className="cache-list-panel">
+                  <div className="cache-list-toolbar">
+                    <input
+                      className="filter-input"
+                      type="search"
+                      placeholder="Filter by name, code, type…"
+                      value={cacheFilter}
+                      onChange={e => setCacheFilter(e.target.value)}
+                      aria-label="Filter caches"
+                    />
+                    <select
+                      className="sort-select"
+                      value={cacheSort}
+                      onChange={e => setCacheSort(e.target.value)}
+                      aria-label="Sort caches by"
+                    >
+                      <option value="name">Sort: Name</option>
+                      <option value="difficulty">Sort: Difficulty</option>
+                      <option value="terrain">Sort: Terrain</option>
+                      <option value="type">Sort: Type</option>
+                      <option value="size2">Sort: Size</option>
+                    </select>
+                  </div>
+                  <div className="cache-count">{filtered.length} of {caches.length} caches</div>
+                  <div className="cache-table-wrap">
+                    <table className="cache-table" role="grid" aria-label="Cache list">
+                      <thead>
+                        <tr>
+                          <th onClick={() => setCacheSort("name")}      className={cacheSort==="name"?"sorted":""}>Name</th>
+                          <th onClick={() => setCacheSort("type")}      className={`col-type${cacheSort==="type"?" sorted":""}`}>Type</th>
+                          <th onClick={() => setCacheSort("difficulty")} className={cacheSort==="difficulty"?"sorted":""}>D</th>
+                          <th onClick={() => setCacheSort("terrain")}   className={cacheSort==="terrain"?"sorted":""}>T</th>
+                          <th onClick={() => setCacheSort("size2")}     className={`col-size${cacheSort==="size2"?" sorted":""}`}>Size</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map(c => (
+                          <tr
+                            key={c.code}
+                            onClick={() => selectCache(c)}
+                            onKeyDown={e => (e.key==="Enter"||e.key===" ") && selectCache(c)}
+                            tabIndex={0}
+                            role="row"
+                            aria-selected={selected === c.code}
+                          >
+                            <td>
+                              <div className="ct-name">{c.name}</div>
+                              <div className="ct-code">{c.code}</div>
+                            </td>
+                            <td className="col-type">
+                              <span className="badge badge-type">
+                                {(c.type||"").replace("Traditional Cache","TRAD").replace("Multi-Cache","MULTI").replace("Unknown Cache","MYSTERY")}
+                              </span>
+                            </td>
+                            <td className="ct-num">{c.difficulty}</td>
+                            <td className="ct-num">{c.terrain}</td>
+                            <td className="col-size ct-center">
+                              <span className="badge badge-size">{c.size2||"?"}</span>
+                            </td>
+                          </tr>
+                        ))}
+                        {sorted.length === 0 && (
+                          <tr><td colSpan={5} style={{color:"var(--muted)",textAlign:"center",padding:"24px"}}>No caches match your filter.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
 
             {selected && (
               <>
