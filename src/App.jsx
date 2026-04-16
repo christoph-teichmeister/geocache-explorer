@@ -262,6 +262,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [pingStatus, setPingStatus] = useState(null); // null | "ok" | "fail"
+  const [geolocating, setGeolocating] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
 
   // Persist consumer key to localStorage
@@ -329,7 +330,7 @@ export default function App() {
       const detail = await fetchOKAPI("services/caches/geocache", {
         consumer_key: consumerKey,
         cache_code: cache.code,
-        fields: "code|name|type|difficulty|terrain|size2|location|description|short_description|url|date_hidden|founds|dnfs|recommendations",
+        fields: "code|name|type|difficulty|terrain|size2|location|description|short_description|url|date_hidden|founds|notfounds|recommendations",
       });
       setCacheDetail(detail);
 
@@ -369,7 +370,7 @@ export default function App() {
     ).join("\n\n");
 
     const cacheInfo = cacheDetail
-      ? `Cache: "${cacheDetail.name}" | Type: ${cacheDetail.type} | Difficulty: ${cacheDetail.difficulty} | Terrain: ${cacheDetail.terrain} | Founds: ${cacheDetail.founds} | DNFs: ${cacheDetail.dnfs}`
+      ? `Cache: "${cacheDetail.name}" | Type: ${cacheDetail.type} | Difficulty: ${cacheDetail.difficulty} | Terrain: ${cacheDetail.terrain} | Founds: ${cacheDetail.founds} | DNFs: ${cacheDetail.notfounds}`
       : "";
 
     try {
@@ -397,6 +398,22 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
       setError("AI analysis failed: " + e.message);
     }
     setFactsLoading(false);
+  };
+
+  const geolocate = () => {
+    if (!navigator.geolocation) { setError("Geolocation not supported by your browser."); return; }
+    setGeolocating(true); setError("");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const { latitude: lat, longitude: lon } = coords;
+        // ~1km padding in degrees (rough but good enough for a bbox)
+        const pad = 0.009;
+        setBbox(`${(lat - pad).toFixed(5)},${(lon - pad).toFixed(5)},${(lat + pad).toFixed(5)},${(lon + pad).toFixed(5)}`);
+        setGeolocating(false);
+      },
+      (err) => { setError("Geolocation failed: " + err.message); setGeolocating(false); },
+      { timeout: 8000 }
+    );
   };
 
   const applyPreset = (p) => {
@@ -475,6 +492,11 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                 {PRESETS.map(p => (
                   <button key={p.name} className="preset-btn" onClick={() => applyPreset(p)}>{p.name}</button>
                 ))}
+              </div>
+              <div style={{display:"flex",gap:"6px",marginTop:"8px"}}>
+                <button className="btn btn-ghost btn-sm" onClick={geolocate} disabled={geolocating} style={{flex:1}}>
+                  {geolocating ? "Locating…" : "📍 Use my location"}
+                </button>
               </div>
               <div className="search-row">
                 <button className="btn" style={{flex:1}} onClick={searchCaches} disabled={searchLoading}>
@@ -602,7 +624,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                         </div>
                         <div className="detail-card">
                           <div className="detail-card-label">DNFs</div>
-                          <div className="detail-card-value" style={{color:"var(--danger)"}}>{cacheDetail.dnfs ?? "—"}</div>
+                          <div className="detail-card-value" style={{color:"var(--danger)"}}>{cacheDetail.notfounds ?? "—"}</div>
                         </div>
                         <div className="detail-card">
                           <div className="detail-card-label">Recommendations</div>
