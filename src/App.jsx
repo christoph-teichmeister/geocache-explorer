@@ -60,7 +60,8 @@ const css = `
     align-items: center;
     gap: 16px;
     background: var(--surface);
-    position: sticky; top: 0; z-index: 100;
+    position: sticky; top: 0; z-index: 300;
+    height: 61px;
   }
   .header-logo {
     font-family: 'Unbounded', sans-serif;
@@ -96,15 +97,26 @@ const css = `
     .main { grid-template-columns: 1fr; }
     .main.sidebar-closed { grid-template-columns: 1fr; }
     .sidebar {
-      position: fixed; top: 61px; left: 0; bottom: 0; z-index: 200;
-      width: 100vw; max-width: 100vw; transform: translateX(0);
+      position: fixed; top: 61px; left: 0; bottom: 0; z-index: 250;
+      width: 85vw; max-width: 340px;
+      transform: translateX(0);
       transition: transform 0.25s ease, opacity 0.2s ease;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.5);
     }
-    .sidebar.closed { transform: translateX(-100%); opacity: 0; pointer-events: none; width: 100vw; }
+    .sidebar.closed {
+      transform: translateX(-100%);
+      opacity: 0;
+      pointer-events: none;
+    }
     .sidebar-overlay {
-      display: block; position: fixed; inset: 0; top: 61px;
-      background: rgba(0,0,0,0.6); z-index: 199;
+      display: block;
+      position: fixed;
+      top: 61px; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 249;
+      cursor: pointer;
     }
+    .sidebar-overlay.hidden { display: none; }
   }
   @media (min-width: 641px) { .sidebar-overlay { display: none !important; } }
 
@@ -471,7 +483,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
 
         <div className={`main${sidebarOpen ? "" : " sidebar-closed"}`}>
           {/* Sidebar */}
-          {!sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(true)} />}
+          <div className={`sidebar-overlay${sidebarOpen ? "" : " hidden"}`} onClick={() => setSidebarOpen(false)} />
           <div className={`sidebar${sidebarOpen ? "" : " closed"}`}>
             {/* API Key */}
             <div className="sidebar-section">
