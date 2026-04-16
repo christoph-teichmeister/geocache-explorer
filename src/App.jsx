@@ -72,10 +72,41 @@ const css = `
   .header-sub { color: var(--muted); font-size: 11px; flex: 1; }
   .header-node { color: var(--accent2); font-size: 10px; background: rgba(64,245,200,0.08); padding: 3px 8px; border-radius: 20px; border: 1px solid rgba(64,245,200,0.2); }
 
-  .main { display: grid; grid-template-columns: 340px 1fr; flex: 1; height: calc(100vh - 61px); }
+  .main { display: grid; grid-template-columns: 340px 1fr; flex: 1; height: calc(100vh - 61px); transition: grid-template-columns 0.25s ease; }
+  .main.sidebar-closed { grid-template-columns: 0px 1fr; }
 
   /* Sidebar */
-  .sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); overflow: hidden; }
+  .sidebar {
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    background: var(--surface); overflow: hidden;
+    transition: width 0.25s ease, opacity 0.2s ease;
+    width: 340px; min-width: 0;
+  }
+  .sidebar.closed { width: 0; opacity: 0; pointer-events: none; border-right: none; }
+
+  .toggle-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text2);
+    width: 32px; height: 32px; border-radius: var(--radius); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+    flex-shrink: 0; transition: border-color 0.15s, color 0.15s;
+  }
+  .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  @media (max-width: 640px) {
+    .main { grid-template-columns: 1fr; }
+    .main.sidebar-closed { grid-template-columns: 1fr; }
+    .sidebar {
+      position: fixed; top: 61px; left: 0; bottom: 0; z-index: 200;
+      width: 100vw; max-width: 100vw; transform: translateX(0);
+      transition: transform 0.25s ease, opacity 0.2s ease;
+    }
+    .sidebar.closed { transform: translateX(-100%); opacity: 0; pointer-events: none; width: 100vw; }
+    .sidebar-overlay {
+      display: block; position: fixed; inset: 0; top: 61px;
+      background: rgba(0,0,0,0.6); z-index: 199;
+    }
+  }
+  @media (min-width: 641px) { .sidebar-overlay { display: none !important; } }
 
   .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
   .sidebar-label { font-size: 9px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
@@ -263,6 +294,7 @@ export default function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [pingStatus, setPingStatus] = useState(null); // null | "ok" | "fail"
   const [geolocating, setGeolocating] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [keySaved, setKeySaved] = useState(false);
 
   // Persist consumer key to localStorage
@@ -325,6 +357,8 @@ export default function App() {
     setSelected(cache.code);
     setCacheDetail(null); setLogs([]); setFacts([]); setLogStats(null);
     setLoading(true); setTab("logs"); setError("");
+    // Auto-close sidebar on mobile after picking a cache
+    if (window.innerWidth <= 640) setSidebarOpen(false);
     try {
       // detail
       const detail = await fetchOKAPI("services/caches/geocache", {
@@ -427,14 +461,18 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
       <div className="app">
         {/* Header */}
         <div className="header">
+          <button className="toggle-btn" onClick={() => setSidebarOpen(o => !o)} title="Toggle sidebar">
+            {sidebarOpen ? "◀" : "▶"}
+          </button>
           <div className="header-logo">GEOCACHE_EXPLORER</div>
           <div className="header-sub">OKAPI · opencaching.de · Fun Facts Engine</div>
           <div className="header-node">DE NODE</div>
         </div>
 
-        <div className="main">
+        <div className={`main${sidebarOpen ? "" : " sidebar-closed"}`}>
           {/* Sidebar */}
-          <div className="sidebar">
+          {!sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(true)} />}
+          <div className={`sidebar${sidebarOpen ? "" : " closed"}`}>
             {/* API Key */}
             <div className="sidebar-section">
               <div className="sidebar-label">OKAPI Consumer Key</div>
