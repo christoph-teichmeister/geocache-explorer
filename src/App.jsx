@@ -248,7 +248,7 @@ const stripHtml = (html = "") =>
 
 // ── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [consumerKey, setConsumerKey] = useState("");
+  const [consumerKey, setConsumerKey] = useState(() => localStorage.getItem("okapi_consumer_key") || "");
   const [bbox, setBbox] = useState("52.49,13.36,52.54,13.44");
   const [caches, setCaches] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -262,6 +262,19 @@ export default function App() {
   const [error, setError] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [pingStatus, setPingStatus] = useState(null); // null | "ok" | "fail"
+  const [keySaved, setKeySaved] = useState(false);
+
+  // Persist consumer key to localStorage
+  useEffect(() => {
+    if (consumerKey) {
+      localStorage.setItem("okapi_consumer_key", consumerKey);
+      setKeySaved(true);
+      const t = setTimeout(() => setKeySaved(false), 1800);
+      return () => clearTimeout(t);
+    } else {
+      localStorage.removeItem("okapi_consumer_key");
+    }
+  }, [consumerKey]);
 
   // Connectivity test
   const pingOKAPI = async () => {
@@ -408,15 +421,26 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
             {/* API Key */}
             <div className="sidebar-section">
               <div className="sidebar-label">OKAPI Consumer Key</div>
-              <div className="key-input-wrap">
+              <div className="key-input-wrap" style={{display:"flex",gap:"6px",alignItems:"center"}}>
                 <input
                   className="key-input"
-                  type="text"
+                  type="password"
                   placeholder="Paste your consumer key…"
                   value={consumerKey}
                   onChange={e => setConsumerKey(e.target.value)}
+                  style={{flex:1}}
                 />
+                {consumerKey && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => { setConsumerKey(""); setPingStatus(null); }}
+                    title="Clear saved key"
+                    style={{padding:"6px 8px",flexShrink:0}}
+                  >✕</button>
+                )}
               </div>
+              {keySaved && <div style={{color:"var(--accent)",fontSize:"10px",marginTop:"4px"}}>✅ Key saved to browser</div>}
+              {!keySaved && consumerKey && <div style={{color:"var(--muted)",fontSize:"10px",marginTop:"4px"}}>🔑 Key loaded from browser storage</div>}
               <button className="btn btn-ghost btn-sm" style={{marginTop:"8px"}} onClick={pingOKAPI}>
                 Test connection
               </button>
