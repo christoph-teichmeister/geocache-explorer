@@ -387,7 +387,7 @@ export default function App() {
         limit: 50,
         fields: "uuid|date|user|type|comment",
       });
-      const logList = logsRes.logs || [];
+      const logList = Array.isArray(logsRes) ? logsRes : (logsRes.logs || []);
       setLogs(logList);
 
       // stats
@@ -453,8 +453,8 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
       ({ coords }) => {
         const { latitude: lat, longitude: lon } = coords;
         // ~1km padding in degrees (rough but good enough for a bbox)
-        const pad = 0.009;
-        setBbox(`${(lat - pad).toFixed(5)},${(lon - pad).toFixed(5)},${(lat + pad).toFixed(5)},${(lon + pad).toFixed(5)}`);
+        const pad = 0.04; // ~4km radius, matches Berlin preset scale
+        setBbox(`${(lat - pad).toFixed(2)},${(lon - pad).toFixed(2)},${(lat + pad).toFixed(2)},${(lon + pad).toFixed(2)}`);
         setGeolocating(false);
       },
       (err) => { setError("Geolocation failed: " + err.message); setGeolocating(false); },
