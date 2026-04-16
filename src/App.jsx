@@ -271,6 +271,27 @@ const css = `
   .stat-num { font-family: 'Unbounded', sans-serif; font-weight: 900; font-size: 22px; color: var(--accent); }
   .stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
 
+  /* Finders list */
+  .finders-list { display: flex; flex-direction: column; gap: 0; }
+  .finder-row {
+    display: grid;
+    grid-template-columns: 32px 1fr auto;
+    gap: 10px; align-items: start;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .finder-rank {
+    font-family: 'Unbounded', sans-serif; font-weight: 900; font-size: 10px;
+    color: var(--muted); text-align: right; padding-top: 2px;
+  }
+  .finder-rank.top { color: var(--accent); }
+  .finder-body { min-width: 0; }
+  .finder-name { font-size: 12px; font-weight: 700; color: var(--accent2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .finder-snippet { font-size: 11px; color: var(--text2); line-height: 1.5; margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .finder-date { font-size: 10px; color: var(--muted); white-space: nowrap; padding-top: 2px; }
+  .finders-empty { color: var(--muted); font-size: 11px; padding: 24px 0; text-align: center; }
+  .finders-count { font-size: 10px; color: var(--muted); margin-bottom: 12px; }
+  .finders-count span { color: var(--accent); font-weight: 700; }
+
   .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); padding: 20px 0; }
   .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -706,6 +727,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                   <div className="panel-tabs" role="tablist">
                     <button className={`tab${tab==="logs"?" active":""}`} role="tab" aria-selected={tab==="logs"} onClick={()=>setTab("logs")}>LOGS</button>
                     <button className={`tab${tab==="detail"?" active":""}`} role="tab" aria-selected={tab==="detail"} onClick={()=>setTab("detail")}>DETAILS</button>
+                    <button className={`tab${tab==="finders"?" active":""}`} role="tab" aria-selected={tab==="finders"} onClick={()=>setTab("finders")}>🏆 FINDERS</button>
                     <button className={`tab${tab==="facts"?" active":""}`} role="tab" aria-selected={tab==="facts"} onClick={()=>setTab("facts")}>🤖 FUN FACTS</button>
                   </div>
                 </div>
@@ -788,6 +810,41 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                       )}
                     </>
                   )}
+
+                  {/* FINDERS tab */}
+                  {!loading && tab==="finders" && (() => {
+                    const finders = logs.filter(l => l.type === "Found it");
+                    return (
+                      <div>
+                        {finders.length > 0
+                          ? <div className="finders-count">
+                              Showing <span>{finders.length}</span> finds from the last {logs.length} logs
+                            </div>
+                          : null}
+                        <div className="finders-list" role="list">
+                          {finders.length === 0 && (
+                            <div className="finders-empty">No "Found it" logs in the loaded entries.</div>
+                          )}
+                          {finders.map((log, i) => {
+                            const snippet = stripHtml(log.comment || "").trim();
+                            const isTop = i < 3;
+                            return (
+                              <div key={log.uuid} className="finder-row" role="listitem">
+                                <div className={`finder-rank${isTop ? " top" : ""}`}>
+                                  {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                                </div>
+                                <div className="finder-body">
+                                  <div className="finder-name">{log.user?.username || "Unknown"}</div>
+                                  {snippet && <div className="finder-snippet">{snippet}</div>}
+                                </div>
+                                <div className="finder-date">{log.date?.slice(0, 10)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* FUN FACTS tab */}
                   {tab==="facts" && (
