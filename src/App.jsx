@@ -492,6 +492,7 @@ export default function App() {
   const [keySaved, setKeySaved] = useState(false);
   const [selectedNode, setSelectedNode] = useState("de");
   const [cacheFilter, setCacheFilter] = useState("");
+  const [topPicksOpen, setTopPicksOpen] = useState(true);
   const [cacheSort, setCacheSort] = useState("score"); // score | name | difficulty | terrain | type | size2
   const [moreResults, setMoreResults] = useState(false);
 
@@ -585,6 +586,7 @@ export default function App() {
       }, nodeBase);
       const list = Object.values(geocachesRes).filter(Boolean);
       setCaches(list);
+      setSidebarOpen(false);
     } catch (e) {
       setError("API error: " + (e.message || "Check your consumer key and try again."));
     }
@@ -909,39 +911,49 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
               const medals = ["🥇","🥈","🥉","4","5"];
               return (
                 <div className="cache-list-panel">
-                  {/* Top picks */}
+                  {/* Top picks — collapsible */}
                   <div className="top-picks">
-                    <div className="top-picks-label">⭐ Top Picks</div>
-                    <div className="top-picks-cards">
-                      {topPicks.map((c, i) => {
-                        const signals = scoreBreakdown(c, caches);
-                        return (
-                          <div
-                            key={c.code}
-                            className="top-pick-card"
-                            onClick={() => selectCache(c)}
-                            onKeyDown={e => (e.key==="Enter"||e.key===" ") && selectCache(c)}
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`Open ${c.name}, score ${c._score}`}
-                          >
-                            <div className="top-pick-rank">{medals[i]} #{i+1}</div>
-                            <div className="top-pick-name">{c.name}</div>
-                            <div className="top-pick-score">{c._score}</div>
-                            <div className="top-pick-signals">
-                              {signals.map(s => (
-                                <div key={s.label} className="top-pick-signal">
-                                  <span>{s.label}</span>
-                                  <div className="top-pick-signal-bar">
-                                    <div className="top-pick-signal-fill" style={{width:`${s.value}%`}} />
+                    <button
+                      className="top-picks-label"
+                      onClick={() => setTopPicksOpen(o => !o)}
+                      aria-expanded={topPicksOpen}
+                      style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"6px",padding:0,width:"100%",textAlign:"left"}}
+                    >
+                      <span style={{flex:1}}>⭐ Top Picks</span>
+                      <span style={{fontSize:"10px",color:"var(--muted)",fontFamily:"Space Mono,monospace"}}>{topPicksOpen ? "▲ collapse" : "▼ expand"}</span>
+                    </button>
+                    {topPicksOpen && (
+                      <div className="top-picks-cards" style={{marginTop:"10px"}}>
+                        {topPicks.map((c, i) => {
+                          const signals = scoreBreakdown(c, caches);
+                          return (
+                            <div
+                              key={c.code}
+                              className="top-pick-card"
+                              onClick={() => selectCache(c)}
+                              onKeyDown={e => (e.key==="Enter"||e.key===" ") && selectCache(c)}
+                              tabIndex={0}
+                              role="button"
+                              aria-label={`Open ${c.name}, score ${c._score}`}
+                            >
+                              <div className="top-pick-rank">{medals[i]} #{i+1}</div>
+                              <div className="top-pick-name">{c.name}</div>
+                              <div className="top-pick-score">{c._score}</div>
+                              <div className="top-pick-signals">
+                                {signals.map(s => (
+                                  <div key={s.label} className="top-pick-signal">
+                                    <span>{s.label}</span>
+                                    <div className="top-pick-signal-bar">
+                                      <div className="top-pick-signal-fill" style={{width:`${s.value}%`}} />
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {moreResults && (
@@ -1053,8 +1065,6 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                   <div className="panel-tabs" role="tablist">
                     <button className={`tab${tab==="logs"?" active":""}`} role="tab" aria-selected={tab==="logs"} onClick={()=>setTab("logs")}>LOGS</button>
                     <button className={`tab${tab==="detail"?" active":""}`} role="tab" aria-selected={tab==="detail"} onClick={()=>setTab("detail")}>DETAILS</button>
-                    <button className={`tab${tab==="finders"?" active":""}`} role="tab" aria-selected={tab==="finders"} onClick={()=>setTab("finders")}>🏆 FINDERS</button>
-                    <button className={`tab${tab==="facts"?" active":""}`} role="tab" aria-selected={tab==="facts"} onClick={()=>setTab("facts")}>🤖 FUN FACTS</button>
                   </div>
                 </div>
 
@@ -1072,13 +1082,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                           <div className="stat-box"><div className="stat-num">{logStats.avgLen}</div><div className="stat-label">Avg Log Chars</div></div>
                         </div>
                       )}
-                      {logStats && (
-                        <div style={{marginBottom:"16px"}}>
-                          <button className="btn" onClick={generateFacts} disabled={factsLoading}>
-                            {factsLoading ? "🤖 ANALYSING…" : "🤖 GENERATE FUN FACTS"}
-                          </button>
-                        </div>
-                      )}
+
                       {logs.map(log => (
                         <div key={log.uuid} className="log-entry">
                           <div className="log-header">
