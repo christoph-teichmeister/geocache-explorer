@@ -397,7 +397,7 @@ export default function App() {
 
   // Search caches by bbox
   const searchCaches = async (bboxOverride) => {
-    const activeBbox = bboxOverride || bbox;
+    const activeBbox = (typeof bboxOverride === "string" ? bboxOverride : null) || bbox;
     if (!consumerKey) { setError("Consumer key required. Get one free at opencaching.de/okapi/signup.html"); return; }
     if (!activeBbox.match(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/)) {
       setError("Invalid bbox format. Use: south_lat,west_lon,north_lat,east_lon"); return;
