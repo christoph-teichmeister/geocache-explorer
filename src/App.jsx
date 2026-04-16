@@ -530,7 +530,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
         searchCaches(newBbox);
       },
       (err) => { setError("Geolocation failed: " + err.message); setGeolocating(false); },
-      { timeout: 8000 }
+      { timeout: 30000, maximumAge: 60000, enableHighAccuracy: false }
     );
   };
 
