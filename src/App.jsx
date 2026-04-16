@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 
-const OKAPI_BASE = "https://www.opencaching.de/okapi";
+// fetchOKAPI is called with a base URL so it can target different nodes
+const OKAPI_BASE_DEFAULT = "https://www.opencaching.de/okapi";
 
-const fetchOKAPI = async (path, params = {}) => {
-  const url = new URL(`${OKAPI_BASE}/${path}`);
+const fetchOKAPI = async (path, params = {}, base = OKAPI_BASE_DEFAULT) => {
+  const url = new URL(`${base}/${path}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   let res;
   try {
@@ -386,9 +387,13 @@ const css = `
 `;
 
 // ── Preset bounding boxes ────────────────────────────────────────────────────
-const PRESETS = [
-  { name: "Munich 🇩🇪",  lat: 48.1351, lon: 11.5820 },
-  { name: "Cologne 🇩🇪", lat: 50.9333, lon: 6.9500  },
+const OKAPI_NODES = [
+  { id: "de", label: "DE · Germany, AT, CH, IT, FR, ES", base: "https://www.opencaching.de/okapi" },
+  { id: "pl", label: "PL · Poland + international",      base: "https://opencaching.pl/okapi"   },
+  { id: "uk", label: "UK · United Kingdom",              base: "https://opencache.uk/okapi"     },
+  { id: "nl", label: "NL · Netherlands",                 base: "https://www.opencaching.nl/okapi"},
+  { id: "us", label: "US · North America",               base: "https://www.opencaching.us/okapi"},
+  { id: "ro", label: "RO · Romania",                     base: "https://www.opencaching.ro/okapi"},
 ];
 
 // Convert center + radius (km) to S,W,N,E bbox string
@@ -485,6 +490,7 @@ export default function App() {
   const [geolocating, setGeolocating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [keySaved, setKeySaved] = useState(false);
+  const [selectedNode, setSelectedNode] = useState("de");
   const [cacheFilter, setCacheFilter] = useState("");
   const [cacheSort, setCacheSort] = useState("score"); // score | name | difficulty | terrain | type | size2
   const [moreResults, setMoreResults] = useState(false);
@@ -557,21 +563,26 @@ export default function App() {
     setError(""); setSearchLoading(true); setCaches([]); setSelected(null); setCacheDetail(null); setLogs([]); setFacts([]); setMoreResults(false);
     try {
       const [s, w, n, e] = activeBbox.split(",");
+      const nodeBase = OKAPI_NODES.find(n => n.id === selectedNode)?.base || OKAPI_BASE_DEFAULT;
       const searchRes = await fetchOKAPI("services/caches/search/bbox", {
         consumer_key: consumerKey,
         bbox: `${s}|${w}|${n}|${e}`,
         limit: 200,
         status: "Available",
-      });
+      }, nodeBase);
       const codes = searchRes.results || [];
       if (searchRes.more_results) setMoreResults(true);
-      if (!codes.length) { setError("No caches found in this area."); setSearchLoading(false); return; }
+      if (!codes.length) {
+        const nodeName = OKAPI_NODES.find(n => n.id === selectedNode)?.label || selectedNode;
+        setError(`No caches found in this area on the ${nodeName} node. Try a different region node above.`);
+        setSearchLoading(false); return;
+      }
       // Bulk fetch with scoring fields
       const geocachesRes = await fetchOKAPI("services/caches/geocaches", {
         consumer_key: consumerKey,
         cache_codes: codes.join("|"),
         fields: "code|name|type|difficulty|terrain|size2|location|url|status|founds|notfounds|recommendations|rating|rating_votes",
-      });
+      }, nodeBase);
       const list = Object.values(geocachesRes).filter(Boolean);
       setCaches(list);
     } catch (e) {
@@ -589,11 +600,12 @@ export default function App() {
     if (window.innerWidth <= 640) setSidebarOpen(false);
     try {
       // detail
+      const nodeBase = OKAPI_NODES.find(n => n.id === selectedNode)?.base || OKAPI_BASE_DEFAULT;
       const detail = await fetchOKAPI("services/caches/geocache", {
         consumer_key: consumerKey,
         cache_code: cache.code,
         fields: "code|name|type|difficulty|terrain|size2|location|description|short_description|url|date_hidden|founds|notfounds|recommendations",
-      });
+      }, nodeBase);
       setCacheDetail(detail);
 
       // logs
@@ -602,7 +614,7 @@ export default function App() {
         cache_code: cache.code,
         limit: 50,
         fields: "uuid|date|user|type|comment",
-      });
+      }, nodeBase);
       const logList = Array.isArray(logsRes) ? logsRes : (logsRes.logs || []);
       setLogs(logList);
 
@@ -685,13 +697,6 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
     );
   };
 
-  const applyPreset = (p) => {
-    const newCenter = { lat: p.lat, lon: p.lon, label: p.name };
-    setCenter(newCenter);
-    setCityInput(p.name);
-    searchCaches(newCenter);
-  };
-
   return (
     <>
       <style>{css}</style>
@@ -703,7 +708,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
           </button>
           <div className="header-logo">GEOCACHE_EXPLORER</div>
           <div className="header-sub">OKAPI · opencaching.de · Fun Facts Engine</div>
-          <div className="header-node">DE NODE</div>
+          <div className="header-node">{(selectedNode || "de").toUpperCase()} NODE</div>
         </div>
 
         <div className={`main${sidebarOpen ? "" : " sidebar-closed"}`}>
@@ -777,6 +782,19 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
 
             {/* City + Radius search */}
             <div className="sidebar-section">
+              <label htmlFor="node-select" className="sidebar-label">OpenCaching Region</label>
+              <select
+                id="node-select"
+                className="sort-select"
+                style={{width:"100%",marginBottom:"12px"}}
+                value={selectedNode}
+                onChange={e => setSelectedNode(e.target.value)}
+                aria-label="Select OpenCaching node"
+              >
+                {OKAPI_NODES.map(n => (
+                  <option key={n.id} value={n.id}>{n.label}</option>
+                ))}
+              </select>
               <label htmlFor="city-input" className="sidebar-label">City or Place</label>
               <div style={{display:"flex",gap:"6px"}}>
                 <input
@@ -810,11 +828,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                   <option value="50">50 km</option>
                 </select>
               </div>
-              <div className="presets" style={{marginTop:"8px"}}>
-                {PRESETS.map(p => (
-                  <button key={p.name} className="preset-btn" onClick={() => applyPreset(p)}>{p.name}</button>
-                ))}
-              </div>
+
               <div style={{display:"flex",gap:"6px",marginTop:"8px"}}>
                 <button className="btn btn-ghost btn-sm" onClick={geolocate} disabled={geolocating} style={{flex:1}}>
                   {geolocating ? "Locating…" : "📍 My location"}
