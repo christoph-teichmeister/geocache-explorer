@@ -375,14 +375,15 @@ export default function App() {
   };
 
   // Search caches by bbox
-  const searchCaches = async () => {
+  const searchCaches = async (bboxOverride) => {
+    const activeBbox = bboxOverride || bbox;
     if (!consumerKey) { setError("Consumer key required. Get one free at opencaching.de/okapi/signup.html"); return; }
-    if (!bbox.match(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/)) {
+    if (!activeBbox.match(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/)) {
       setError("Invalid bbox format. Use: south_lat,west_lon,north_lat,east_lon"); return;
     }
     setError(""); setSearchLoading(true); setCaches([]); setSelected(null); setCacheDetail(null); setLogs([]); setFacts([]);
     try {
-      const [s, w, n, e] = bbox.split(",");
+      const [s, w, n, e] = activeBbox.split(",");
       // search/bbox returns list of cache codes
       const searchRes = await fetchOKAPI("services/caches/search/bbox", {
         consumer_key: consumerKey,
@@ -502,8 +503,10 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
         const { latitude: lat, longitude: lon } = coords;
         // ~1km padding in degrees (rough but good enough for a bbox)
         const pad = 0.04; // ~4km radius, matches Berlin preset scale
-        setBbox(`${(lat - pad).toFixed(2)},${(lon - pad).toFixed(2)},${(lat + pad).toFixed(2)},${(lon + pad).toFixed(2)}`);
+        const newBbox = `${(lat - pad).toFixed(2)},${(lon - pad).toFixed(2)},${(lat + pad).toFixed(2)},${(lon + pad).toFixed(2)}`;
+        setBbox(newBbox);
         setGeolocating(false);
+        searchCaches(newBbox);
       },
       (err) => { setError("Geolocation failed: " + err.message); setGeolocating(false); },
       { timeout: 8000 }
