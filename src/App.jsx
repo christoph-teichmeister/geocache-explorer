@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 const OKAPI_BASE = "https://www.opencaching.de/okapi";
 
@@ -27,8 +27,6 @@ const fetchOKAPI = async (path, params = {}) => {
   return json;
 };
 
-const CACHE_NODE = "https://www.opencaching.de";
-
 // ── Styles ──────────────────────────────────────────────────────────────────
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Unbounded:wght@300;600;900&display=swap');
@@ -42,7 +40,7 @@ const css = `
     --border: #242830;
     --accent: #c8f540;
     --accent2: #40f5c8;
-    --muted: #4a5060;
+    --muted: #6b7585;
     --text: #e8ecf0;
     --text2: #8892a0;
     --danger: #f54060;
@@ -166,7 +164,7 @@ const css = `
   .cache-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
   .cache-item {
-    padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer;
+    padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; min-height: 44px;
     transition: background 0.15s; display: flex; flex-direction: column; gap: 4px;
   }
   .cache-item:hover { background: var(--surface2); }
@@ -193,23 +191,29 @@ const css = `
   .panel-empty-icon { font-size: 48px; opacity: 0.3; }
   .panel-empty-text { font-family: 'Unbounded', sans-serif; font-size: 11px; letter-spacing: 1px; }
 
-  .panel-header { padding: 20px 24px 0; border-bottom: 1px solid var(--border); }
-  .panel-title { font-family: 'Unbounded', sans-serif; font-weight: 900; font-size: 20px; line-height: 1.2; margin-bottom: 8px; }
+  .panel-header { padding: 16px 16px 0; border-bottom: 1px solid var(--border); }
+  @media (min-width: 641px) { .panel-header { padding: 20px 24px 0; } }
+  .panel-title { font-family: 'Unbounded', sans-serif; font-weight: 900; font-size: 16px; line-height: 1.2; margin-bottom: 8px; word-break: break-word; }
+  @media (min-width: 641px) { .panel-title { font-size: 20px; } }
   .panel-tabs { display: flex; gap: 0; margin-top: 12px; }
   .tab {
-    padding: 8px 18px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
-    cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted);
+    padding: 10px 14px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; border: none; border-bottom: 2px solid transparent; color: var(--muted);
     font-family: 'Unbounded', sans-serif; font-weight: 600; transition: all 0.15s;
+    background: transparent; min-height: 44px; display: flex; align-items: center;
   }
+  @media (max-width: 400px) { .tab { padding: 10px 10px; font-size: 9px; } }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab:hover:not(.active) { color: var(--text2); }
 
-  .panel-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+  @media (min-width: 641px) { .panel-body { padding: 20px 24px; } }
   .panel-body::-webkit-scrollbar { width: 4px; }
   .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
   /* Cache detail */
   .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 500px) { .detail-grid { grid-template-columns: repeat(2, 1fr); } }
   .detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }
   .detail-card-label { font-size: 9px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
   .detail-card-value { font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 14px; color: var(--accent); }
@@ -219,7 +223,7 @@ const css = `
 
   /* Logs */
   .log-entry { border-bottom: 1px solid var(--border); padding: 14px 0; }
-  .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .log-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; flex-wrap: wrap; gap: 4px; }
   .log-user { font-weight: 700; color: var(--accent2); font-size: 11px; }
   .log-date { color: var(--muted); font-size: 10px; }
   .log-type-badge { font-size: 9px; padding: 2px 7px; border-radius: 2px; font-family: 'Unbounded', sans-serif; }
@@ -251,12 +255,18 @@ const css = `
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  @media (prefers-reduced-motion: reduce) {
+    .fact-card { animation: none; opacity: 1; }
+    .sidebar, .main { transition: none; }
+    .spinner { animation-duration: 1.5s; }
+  }
 
   .fact-emoji { font-size: 18px; margin-bottom: 6px; }
   .fact-text { color: var(--text); font-size: 12px; line-height: 1.65; }
   .fact-category { font-size: 9px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 6px; }
 
   .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  @media (max-width: 500px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
   .stat-box { background: var(--surface); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius); text-align: center; }
   .stat-num { font-family: 'Unbounded', sans-serif; font-weight: 900; font-size: 22px; color: var(--accent); }
   .stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
@@ -291,6 +301,20 @@ const PRESETS = [
 // ── Strip HTML ───────────────────────────────────────────────────────────────
 const stripHtml = (html = "") =>
   html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 800);
+
+// Allow only safe inline tags from log comments
+const sanitiseLogHtml = (html = "") => {
+  if (!html) return "<em>No comment.</em>";
+  // Strip potentially dangerous tags/attrs, keep br/p/em/strong/a(href only)
+  return html
+    .replace(/<script[^>]*>.*?<\/script>/gis, "")
+    .replace(/<iframe[^>]*>.*?<\/iframe>/gis, "")
+    .replace(/on\w+="[^"]*"/gi, "")
+    .replace(/on\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/<img[^>]*>/gi, "")
+    .replace(/<(?!\/?(?:br|p|em|strong|b|i|ul|ol|li|a)(?:\s|>|\/))([^>]*)>/gi, "");
+};
 
 // ── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
@@ -385,7 +409,7 @@ export default function App() {
   const selectCache = async (cache) => {
     setSelected(cache.code);
     setCacheDetail(null); setLogs([]); setFacts([]); setLogStats(null);
-    setLoading(true); setTab("logs"); setError("");
+    setLoading(true); setTab("logs"); setError(""); setFacts([]);
     // Auto-close sidebar on mobile after picking a cache
     if (window.innerWidth <= 640) setSidebarOpen(false);
     try {
@@ -497,7 +521,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
       <div className="app">
         {/* Header */}
         <div className="header">
-          <button className="toggle-btn" onClick={() => setSidebarOpen(o => !o)} title="Toggle sidebar">
+          <button className="toggle-btn" onClick={() => setSidebarOpen(o => !o)} title="Toggle sidebar" aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}>
             {sidebarOpen ? "◀" : "▶"}
           </button>
           <div className="header-logo">GEOCACHE_EXPLORER</div>
@@ -511,13 +535,15 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
           <div className={`sidebar${sidebarOpen ? "" : " closed"}`}>
             {/* API Key */}
             <div className="sidebar-section">
-              <div className="sidebar-label">OKAPI Consumer Key</div>
+              <label htmlFor="okapi-key" className="sidebar-label">OKAPI Consumer Key</label>
               <div className="key-input-wrap" style={{display:"flex",gap:"6px",alignItems:"center"}}>
                 <input
                   className="key-input"
+                  id="okapi-key"
                   type="password"
                   placeholder="Paste your consumer key…"
                   value={consumerKey}
+                  autoComplete="off"
                   onChange={e => setConsumerKey(e.target.value)}
                   style={{flex:1}}
                 />
@@ -526,6 +552,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                     className="btn btn-ghost btn-sm"
                     onClick={() => { setConsumerKey(""); setPingStatus(null); }}
                     title="Clear saved key"
+                    aria-label="Clear OKAPI key"
                     style={{padding:"6px 8px",flexShrink:0}}
                   >✕</button>
                 )}
@@ -544,20 +571,24 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
 
             {/* Anthropic API Key */}
             <div className="sidebar-section">
-              <div className="sidebar-label">Anthropic API Key</div>
+              <label htmlFor="anthropic-key" className="sidebar-label">Anthropic API Key</label>
               <div className="key-input-wrap" style={{display:"flex",gap:"6px",alignItems:"center"}}>
                 <input
                   className="key-input"
+                  id="anthropic-key"
                   type="password"
                   placeholder="sk-ant-…"
                   value={anthropicKey}
+                  autoComplete="off"
                   onChange={e => setAnthropicKey(e.target.value)}
                   style={{flex:1}}
                 />
                 {anthropicKey && (
                   <button className="btn btn-ghost btn-sm"
                     onClick={() => setAnthropicKey("")}
-                    title="Clear" style={{padding:"6px 8px",flexShrink:0}}>✕</button>
+                    title="Clear Anthropic key"
+                    aria-label="Clear Anthropic key"
+                    style={{padding:"6px 8px",flexShrink:0}}>✕</button>
                 )}
               </div>
               {anthropicKeySaved && <div style={{color:"var(--accent)",fontSize:"10px",marginTop:"4px"}}>✅ Key saved to browser</div>}
@@ -602,7 +633,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                   {searchLoading ? "SEARCHING…" : "SEARCH CACHES"}
                 </button>
               </div>
-              {error && <div className="error-box">{error}</div>}
+              {error && <div className="error-box" role="alert" aria-live="assertive">{error}</div>}
             </div>
 
             {/* Cache list */}
@@ -623,6 +654,10 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                   key={c.code}
                   className={`cache-item${selected === c.code ? " active" : ""}`}
                   onClick={() => selectCache(c)}
+                  onKeyDown={e => (e.key==="Enter"||e.key===" ") && selectCache(c)}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selected === c.code}
                 >
                   <div className="cache-name">{c.name}</div>
                   <div className="cache-meta">
@@ -665,15 +700,15 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                       </a>
                     </>}
                   </div>
-                  <div className="panel-tabs">
-                    <div className={`tab${tab==="logs"?" active":""}`} onClick={()=>setTab("logs")}>LOGS</div>
-                    <div className={`tab${tab==="detail"?" active":""}`} onClick={()=>setTab("detail")}>DETAILS</div>
-                    <div className={`tab${tab==="facts"?" active":""}`} onClick={()=>setTab("facts")}>🤖 FUN FACTS</div>
+                  <div className="panel-tabs" role="tablist">
+                    <button className={`tab${tab==="logs"?" active":""}`} role="tab" aria-selected={tab==="logs"} onClick={()=>setTab("logs")}>LOGS</button>
+                    <button className={`tab${tab==="detail"?" active":""}`} role="tab" aria-selected={tab==="detail"} onClick={()=>setTab("detail")}>DETAILS</button>
+                    <button className={`tab${tab==="facts"?" active":""}`} role="tab" aria-selected={tab==="facts"} onClick={()=>setTab("facts")}>🤖 FUN FACTS</button>
                   </div>
                 </div>
 
                 <div className="panel-body">
-                  {loading && <div className="loading"><div className="spinner" />Loading cache data…</div>}
+                  {loading && <div className="loading" role="status" aria-live="polite"><div className="spinner" aria-hidden="true" />Loading cache data…</div>}
 
                   {/* LOGS tab */}
                   {!loading && tab==="logs" && (
@@ -705,7 +740,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                             <span className="log-date">{log.date?.slice(0,10)}</span>
                           </div>
                           <div className="log-comment"
-                            dangerouslySetInnerHTML={{__html: log.comment || "<em style='color:var(--muted)'>No comment.</em>"}}
+                            dangerouslySetInnerHTML={{__html: sanitiseLogHtml(log.comment)}}
                           />
                         </div>
                       ))}
@@ -745,7 +780,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                       {(cacheDetail.short_description || cacheDetail.description) && (
                         <div className="desc-box">
                           <div className="sidebar-label" style={{marginBottom:"8px"}}>Cache Description</div>
-                          <div dangerouslySetInnerHTML={{__html: cacheDetail.short_description || cacheDetail.description || ""}} />
+                          <div dangerouslySetInnerHTML={{__html: sanitiseLogHtml(cacheDetail.short_description || cacheDetail.description || "")}} />
                         </div>
                       )}
                     </>
