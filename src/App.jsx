@@ -231,6 +231,36 @@ const css = `
   .ct-num { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 11px; color: var(--accent); text-align: center; }
   .ct-center { text-align: center; }
   .cache-count { font-size: 10px; color: var(--muted); padding: 6px 16px 0; flex-shrink: 0; }
+
+  /* Score bar */
+  .score-bar-wrap { display: flex; align-items: center; gap: 6px; min-width: 80px; }
+  .score-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width 0.3s ease; }
+  .score-num { font-family: 'Unbounded', sans-serif; font-size: 10px; font-weight: 700; color: var(--accent); min-width: 24px; text-align: right; }
+
+  /* Top picks banner */
+  .top-picks { padding: 16px 16px 0; flex-shrink: 0; }
+  @media (min-width: 641px) { .top-picks { padding: 16px 24px 0; } }
+  .top-picks-label { font-family: 'Unbounded', sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+  .top-picks-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-bottom: 4px; }
+  .top-pick-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    border-top: 2px solid var(--accent); display: flex; flex-direction: column; gap: 6px;
+  }
+  .top-pick-card:hover { border-color: var(--accent); background: var(--surface2); }
+  .top-pick-card:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .top-pick-rank { font-family: 'Unbounded', sans-serif; font-size: 9px; color: var(--muted); }
+  .top-pick-name { font-size: 11px; font-weight: 700; color: var(--text); line-height: 1.3; }
+  .top-pick-score { font-family: 'Unbounded', sans-serif; font-size: 18px; font-weight: 900; color: var(--accent); }
+  .top-pick-signals { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+  .top-pick-signal { display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: var(--muted); }
+  .top-pick-signal-bar { width: 40px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .top-pick-signal-fill { height: 100%; background: var(--accent2); border-radius: 2px; }
+
+  /* More results warning */
+  .more-results-warn { font-size: 10px; color: var(--accent); background: rgba(200,245,64,0.06); border: 1px solid rgba(200,245,64,0.2); border-radius: var(--radius); padding: 6px 12px; margin: 8px 16px 0; flex-shrink: 0; }
+  @media (min-width: 641px) { .more-results-warn { margin: 8px 24px 0; } }
   @media (min-width: 641px) { .cache-count { padding: 6px 24px 0; } }
   @media (max-width: 500px) { .col-size, .col-type { display: none; } }
 
@@ -387,6 +417,46 @@ const sanitiseLogHtml = (html = "") => {
     .replace(/<(?!\/?(?:br|p|em|strong|b|i|ul|ol|li|a)(?:\s|>|\/))([^>]*)>/gi, "");
 };
 
+// ── Scoring ─────────────────────────────────────────────────────────────────────
+const scoreCache = (cache, allCaches) => {
+  const maxFounds = Math.max(1, ...allCaches.map(c => c.founds || 0));
+  const maxRcmds  = Math.max(1, ...allCaches.map(c => c.recommendations || 0));
+
+  const signals = [];
+
+  // Founds popularity (0-1)
+  if (cache.founds != null)
+    signals.push((cache.founds || 0) / maxFounds);
+
+  // DNF intrigue ratio (0-1) — high DNF rate = tricky/interesting
+  const total = (cache.founds || 0) + (cache.notfounds || 0);
+  if (total > 0)
+    signals.push((cache.notfounds || 0) / total);
+
+  // Recommendations (0-1)
+  if (cache.recommendations != null)
+    signals.push((cache.recommendations || 0) / maxRcmds);
+
+  // Rating (0-1), only if enough votes
+  if (cache.rating != null && (cache.rating_votes || 0) >= 3)
+    signals.push((cache.rating - 1) / 4);
+
+  if (!signals.length) return 0;
+  return Math.round((signals.reduce((a, b) => a + b, 0) / signals.length) * 100);
+};
+
+const scoreBreakdown = (cache, allCaches) => {
+  const maxFounds = Math.max(1, ...allCaches.map(c => c.founds || 0));
+  const maxRcmds  = Math.max(1, ...allCaches.map(c => c.recommendations || 0));
+  const total = (cache.founds || 0) + (cache.notfounds || 0);
+  return [
+    { label: "Popularity",      value: cache.founds != null ? Math.round(((cache.founds||0)/maxFounds)*100) : null },
+    { label: "DNF Intrigue",    value: total > 0 ? Math.round(((cache.notfounds||0)/total)*100) : null },
+    { label: "Recommendations", value: cache.recommendations != null ? Math.round(((cache.recommendations||0)/maxRcmds)*100) : null },
+    { label: "Rating",         value: cache.rating != null && (cache.rating_votes||0) >= 3 ? Math.round(((cache.rating-1)/4)*100) : null },
+  ].filter(s => s.value != null);
+};
+
 // ── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [consumerKey, setConsumerKey] = useState(() => localStorage.getItem("okapi_consumer_key") || "");
@@ -409,7 +479,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [keySaved, setKeySaved] = useState(false);
   const [cacheFilter, setCacheFilter] = useState("");
-  const [cacheSort, setCacheSort] = useState("name"); // name | difficulty | terrain | type | size2
+  const [cacheSort, setCacheSort] = useState("score"); // score | name | difficulty | terrain | type | size2
+  const [moreResults, setMoreResults] = useState(false);
 
   // Persist Anthropic key to localStorage
   useEffect(() => {
@@ -454,25 +525,26 @@ export default function App() {
     if (!activeBbox.match(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/)) {
       setError("Invalid bbox format. Use: south_lat,west_lon,north_lat,east_lon"); return;
     }
-    setError(""); setSearchLoading(true); setCaches([]); setSelected(null); setCacheDetail(null); setLogs([]); setFacts([]);
+    setError(""); setSearchLoading(true); setCaches([]); setSelected(null); setCacheDetail(null); setLogs([]); setFacts([]); setMoreResults(false);
     try {
       const [s, w, n, e] = activeBbox.split(",");
-      // search/bbox returns list of cache codes
       const searchRes = await fetchOKAPI("services/caches/search/bbox", {
         consumer_key: consumerKey,
         bbox: `${s}|${w}|${n}|${e}`,
-        limit: 30,
+        limit: 200,
         status: "Available",
       });
       const codes = searchRes.results || [];
+      if (searchRes.more_results) setMoreResults(true);
       if (!codes.length) { setError("No caches found in this area."); setSearchLoading(false); return; }
-      // bulk fetch geocache details
+      // Bulk fetch with scoring fields
       const geocachesRes = await fetchOKAPI("services/caches/geocaches", {
         consumer_key: consumerKey,
         cache_codes: codes.join("|"),
-        fields: "code|name|type|difficulty|terrain|size2|location|url|status",
+        fields: "code|name|type|difficulty|terrain|size2|location|url|status|founds|notfounds|recommendations|rating|rating_votes",
       });
-      setCaches(Object.values(geocachesRes).filter(Boolean));
+      const list = Object.values(geocachesRes).filter(Boolean);
+      setCaches(list);
     } catch (e) {
       setError("API error: " + (e.message || "Check your consumer key and try again."));
     }
@@ -760,21 +832,67 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
             )}
 
             {!selected && caches.length > 0 && (() => {
-              const filtered = caches.filter(c =>
+              const withScores = caches.map(c => ({ ...c, _score: scoreCache(c, caches) }));
+              const topPicks = [...withScores].sort((a,b) => b._score - a._score).slice(0, 5);
+              const filtered = withScores.filter(c =>
                 !cacheFilter ||
                 c.name?.toLowerCase().includes(cacheFilter.toLowerCase()) ||
                 c.code?.toLowerCase().includes(cacheFilter.toLowerCase()) ||
                 c.type?.toLowerCase().includes(cacheFilter.toLowerCase())
               );
               const sorted = [...filtered].sort((a, b) => {
+                if (cacheSort === "score")      return b._score - a._score;
                 if (cacheSort === "difficulty") return (a.difficulty||0) - (b.difficulty||0);
-                if (cacheSort === "terrain")    return (a.terrain||0)    - (b.terrain||0);
+                if (cacheSort === "terrain")    return (a.terrain||0) - (b.terrain||0);
                 if (cacheSort === "type")       return (a.type||"").localeCompare(b.type||"");
                 if (cacheSort === "size2")      return (a.size2||"").localeCompare(b.size2||"");
                 return (a.name||"").localeCompare(b.name||"");
               });
+              const medals = ["🥇","🥈","🥉","4","5"];
               return (
                 <div className="cache-list-panel">
+                  {/* Top picks */}
+                  <div className="top-picks">
+                    <div className="top-picks-label">⭐ Top Picks</div>
+                    <div className="top-picks-cards">
+                      {topPicks.map((c, i) => {
+                        const signals = scoreBreakdown(c, caches);
+                        return (
+                          <div
+                            key={c.code}
+                            className="top-pick-card"
+                            onClick={() => selectCache(c)}
+                            onKeyDown={e => (e.key==="Enter"||e.key===" ") && selectCache(c)}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Open ${c.name}, score ${c._score}`}
+                          >
+                            <div className="top-pick-rank">{medals[i]} #{i+1}</div>
+                            <div className="top-pick-name">{c.name}</div>
+                            <div className="top-pick-score">{c._score}</div>
+                            <div className="top-pick-signals">
+                              {signals.map(s => (
+                                <div key={s.label} className="top-pick-signal">
+                                  <span>{s.label}</span>
+                                  <div className="top-pick-signal-bar">
+                                    <div className="top-pick-signal-fill" style={{width:`${s.value}%`}} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {moreResults && (
+                    <div className="more-results-warn">
+                      ⚠️ Area has more than 200 caches — showing first 200. Zoom in for full results.
+                    </div>
+                  )}
+
+                  {/* Toolbar */}
                   <div className="cache-list-toolbar">
                     <input
                       className="filter-input"
@@ -790,6 +908,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                       onChange={e => setCacheSort(e.target.value)}
                       aria-label="Sort caches by"
                     >
+                      <option value="score">Sort: Score ↓</option>
                       <option value="name">Sort: Name</option>
                       <option value="difficulty">Sort: Difficulty</option>
                       <option value="terrain">Sort: Terrain</option>
@@ -798,15 +917,18 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                     </select>
                   </div>
                   <div className="cache-count">{filtered.length} of {caches.length} caches</div>
+
+                  {/* Table */}
                   <div className="cache-table-wrap">
                     <table className="cache-table" role="grid" aria-label="Cache list">
                       <thead>
                         <tr>
-                          <th onClick={() => setCacheSort("name")}      className={cacheSort==="name"?"sorted":""}>Name</th>
-                          <th onClick={() => setCacheSort("type")}      className={`col-type${cacheSort==="type"?" sorted":""}`}>Type</th>
+                          <th onClick={() => setCacheSort("name")}       className={cacheSort==="name"?"sorted":""}>Name</th>
+                          <th onClick={() => setCacheSort("type")}       className={`col-type${cacheSort==="type"?" sorted":""}`}>Type</th>
                           <th onClick={() => setCacheSort("difficulty")} className={cacheSort==="difficulty"?"sorted":""}>D</th>
-                          <th onClick={() => setCacheSort("terrain")}   className={cacheSort==="terrain"?"sorted":""}>T</th>
-                          <th onClick={() => setCacheSort("size2")}     className={`col-size${cacheSort==="size2"?" sorted":""}`}>Size</th>
+                          <th onClick={() => setCacheSort("terrain")}    className={cacheSort==="terrain"?"sorted":""}>T</th>
+                          <th onClick={() => setCacheSort("size2")}      className={`col-size${cacheSort==="size2"?" sorted":""}`}>Size</th>
+                          <th onClick={() => setCacheSort("score")}      className={cacheSort==="score"?"sorted":""}>Score</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -833,10 +955,18 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
                             <td className="col-size ct-center">
                               <span className="badge badge-size">{c.size2||"?"}</span>
                             </td>
+                            <td>
+                              <div className="score-bar-wrap">
+                                <div className="score-bar-bg">
+                                  <div className="score-bar-fill" style={{width:`${c._score}%`}} />
+                                </div>
+                                <span className="score-num">{c._score}</span>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                         {sorted.length === 0 && (
-                          <tr><td colSpan={5} style={{color:"var(--muted)",textAlign:"center",padding:"24px"}}>No caches match your filter.</td></tr>
+                          <tr><td colSpan={6} style={{color:"var(--muted)",textAlign:"center",padding:"24px"}}>No caches match your filter.</td></tr>
                         )}
                       </tbody>
                     </table>
