@@ -150,13 +150,7 @@ const css = `
   .btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); }
   .btn-sm { padding: 4px 10px; font-size: 8px; }
 
-  .bbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
-  .coord-input {
-    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    font-family: 'Space Mono', monospace; font-size: 11px; padding: 6px 8px;
-    border-radius: var(--radius); outline: none; transition: border-color 0.2s;
-  }
-  .coord-input:focus { border-color: var(--accent2); }
+
 
   .cache-list { flex: 1; overflow-y: auto; }
   .cache-list::-webkit-scrollbar { width: 4px; }
@@ -393,11 +387,21 @@ const css = `
 
 // ── Preset bounding boxes ────────────────────────────────────────────────────
 const PRESETS = [
-  { name: "Berlin 🇩🇪", bbox: "52.45,13.30,52.55,13.50" },
-  { name: "Vienna 🇦🇹", bbox: "48.17,16.32,48.25,16.42" },
-  { name: "Munich 🇩🇪", bbox: "48.11,11.52,48.18,11.62" },
-  { name: "Cologne 🇩🇪", bbox: "50.89,6.87,50.99,7.05" },
+  { name: "Munich 🇩🇪",  lat: 48.1351, lon: 11.5820 },
+  { name: "Cologne 🇩🇪", lat: 50.9333, lon: 6.9500  },
 ];
+
+// Convert center + radius (km) to S,W,N,E bbox string
+const radiusToBbox = (lat, lon, radiusKm) => {
+  const latPad = radiusKm / 111;
+  const lonPad = radiusKm / (111 * Math.cos(lat * Math.PI / 180));
+  return [
+    (lat - latPad).toFixed(4),
+    (lon - lonPad).toFixed(4),
+    (lat + latPad).toFixed(4),
+    (lon + lonPad).toFixed(4),
+  ].join(",");
+};
 
 // ── Strip HTML ───────────────────────────────────────────────────────────────
 const stripHtml = (html = "") =>
@@ -462,7 +466,10 @@ export default function App() {
   const [consumerKey, setConsumerKey] = useState(() => localStorage.getItem("okapi_consumer_key") || "");
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("anthropic_api_key") || "");
   const [anthropicKeySaved, setAnthropicKeySaved] = useState(false);
-  const [bbox, setBbox] = useState("52.49,13.36,52.54,13.44");
+  const [cityInput, setCityInput] = useState("");
+  const [radius, setRadius] = useState("10");
+  const [center, setCenter] = useState(null); // { lat, lon, label }
+  const [geocoding, setGeocoding] = useState(false);
   const [caches, setCaches] = useState([]);
   const [selected, setSelected] = useState(null);
   const [cacheDetail, setCacheDetail] = useState(null);
@@ -518,13 +525,35 @@ export default function App() {
     }
   };
 
-  // Search caches by bbox
-  const searchCaches = async (bboxOverride) => {
-    const activeBbox = (typeof bboxOverride === "string" ? bboxOverride : null) || bbox;
-    if (!consumerKey) { setError("Consumer key required. Get one free at opencaching.de/okapi/signup.html"); return; }
-    if (!activeBbox.match(/^-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*,-?\d+\.?\d*$/)) {
-      setError("Invalid bbox format. Use: south_lat,west_lon,north_lat,east_lon"); return;
+  // Geocode city name via Nominatim, then search
+  const geocodeAndSearch = async () => {
+    if (!cityInput.trim()) { setError("Please enter a city name."); return; }
+    if (!consumerKey) { setError("OKAPI consumer key required."); return; }
+    setGeocoding(true); setError("");
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityInput)}&format=json&limit=1`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      const data = await res.json();
+      if (!data.length) { setError(`City not found: "${cityInput}"`); setGeocoding(false); return; }
+      const { lat, lon, display_name } = data[0];
+      const newCenter = { lat: parseFloat(lat), lon: parseFloat(lon), label: display_name.split(",").slice(0,2).join(", ") };
+      setCenter(newCenter);
+      setGeocoding(false);
+      searchCaches(newCenter);
+    } catch (e) {
+      setError("Geocoding failed: " + e.message);
+      setGeocoding(false);
     }
+  };
+
+  // Search caches from a center point + radius
+  const searchCaches = async (centerOverride) => {
+    const activeCenter = centerOverride || center;
+    if (!consumerKey) { setError("Consumer key required. Get one free at opencaching.de/okapi/signup.html"); return; }
+    if (!activeCenter) { setError("No location set. Enter a city or use your location."); return; }
+    const activeBbox = radiusToBbox(activeCenter.lat, activeCenter.lon, parseFloat(radius));
     setError(""); setSearchLoading(true); setCaches([]); setSelected(null); setCacheDetail(null); setLogs([]); setFacts([]); setMoreResults(false);
     try {
       const [s, w, n, e] = activeBbox.split(",");
@@ -645,13 +674,11 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
     setGeolocating(true); setError("");
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        const { latitude: lat, longitude: lon } = coords;
-        // ~1km padding in degrees (rough but good enough for a bbox)
-        const pad = 0.04; // ~4km radius, matches Berlin preset scale
-        const newBbox = `${(lat - pad).toFixed(2)},${(lon - pad).toFixed(2)},${(lat + pad).toFixed(2)},${(lon + pad).toFixed(2)}`;
-        setBbox(newBbox);
+        const newCenter = { lat: coords.latitude, lon: coords.longitude, label: "My Location" };
+        setCenter(newCenter);
+        setCityInput("My Location");
         setGeolocating(false);
-        searchCaches(newBbox);
+        searchCaches(newCenter);
       },
       (err) => { setError("Geolocation failed: " + err.message); setGeolocating(false); },
       { timeout: 30000, maximumAge: 60000, enableHighAccuracy: false }
@@ -659,8 +686,10 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
   };
 
   const applyPreset = (p) => {
-    const [s, w, n, e] = p.bbox.split(",");
-    setBbox(`${s},${w},${n},${e}`);
+    const newCenter = { lat: p.lat, lon: p.lon, label: p.name };
+    setCenter(newCenter);
+    setCityInput(p.name);
+    searchCaches(newCenter);
   };
 
   return (
@@ -746,39 +775,54 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
               </div>
             </div>
 
-            {/* Bbox search */}
+            {/* City + Radius search */}
             <div className="sidebar-section">
-              <div className="sidebar-label">Search Area (Bounding Box)</div>
-              <div className="bbox-grid">
-                {["S lat","W lon","N lat","E lon"].map((lbl, i) => (
-                  <div key={i}>
-                    <div style={{fontSize:"9px",color:"var(--muted)",marginBottom:"3px"}}>{lbl}</div>
-                    <input
-                      className="coord-input"
-                      type="text"
-                      value={bbox.split(",")[i] || ""}
-                      onChange={e => {
-                        const parts = bbox.split(",");
-                        parts[i] = e.target.value;
-                        setBbox(parts.join(","));
-                      }}
-                    />
-                  </div>
-                ))}
+              <label htmlFor="city-input" className="sidebar-label">City or Place</label>
+              <div style={{display:"flex",gap:"6px"}}>
+                <input
+                  id="city-input"
+                  className="key-input"
+                  type="text"
+                  placeholder="e.g. Cologne, Hamburg…"
+                  value={cityInput}
+                  onChange={e => setCityInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && geocodeAndSearch()}
+                  style={{flex:1}}
+                />
               </div>
-              <div className="presets">
+              {center && center.label !== "My Location" && (
+                <div style={{fontSize:"10px",color:"var(--accent2)",marginTop:"4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  📍 {center.label}
+                </div>
+              )}
+              <div style={{marginTop:"8px"}}>
+                <label htmlFor="radius-select" className="sidebar-label" style={{marginBottom:"4px"}}>Radius</label>
+                <select
+                  id="radius-select"
+                  className="sort-select"
+                  style={{width:"100%"}}
+                  value={radius}
+                  onChange={e => setRadius(e.target.value)}
+                >
+                  <option value="5">5 km</option>
+                  <option value="10">10 km</option>
+                  <option value="20">20 km</option>
+                  <option value="50">50 km</option>
+                </select>
+              </div>
+              <div className="presets" style={{marginTop:"8px"}}>
                 {PRESETS.map(p => (
                   <button key={p.name} className="preset-btn" onClick={() => applyPreset(p)}>{p.name}</button>
                 ))}
               </div>
               <div style={{display:"flex",gap:"6px",marginTop:"8px"}}>
                 <button className="btn btn-ghost btn-sm" onClick={geolocate} disabled={geolocating} style={{flex:1}}>
-                  {geolocating ? "Locating…" : "📍 Use my location"}
+                  {geolocating ? "Locating…" : "📍 My location"}
                 </button>
               </div>
               <div className="search-row">
-                <button className="btn" style={{flex:1}} onClick={searchCaches} disabled={searchLoading}>
-                  {searchLoading ? "SEARCHING…" : "SEARCH CACHES"}
+                <button className="btn" style={{flex:1}} onClick={geocodeAndSearch} disabled={searchLoading || geocoding}>
+                  {geocoding ? "LOCATING…" : searchLoading ? "SEARCHING…" : "SEARCH CACHES"}
                 </button>
               </div>
               {error && <div className="error-box" role="alert" aria-live="assertive">{error}</div>}
