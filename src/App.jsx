@@ -55,23 +55,26 @@ const css = `
 
   .header {
     border-bottom: 1px solid var(--border);
-    padding: 20px 28px;
+    padding: 0 16px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     background: var(--surface);
     position: sticky; top: 0; z-index: 300;
     height: 61px;
+    min-width: 0;
   }
   .header-logo {
     font-family: 'Unbounded', sans-serif;
     font-weight: 900;
-    font-size: 18px;
+    font-size: 15px;
     color: var(--accent);
     letter-spacing: -0.5px;
+    white-space: nowrap;
   }
-  .header-sub { color: var(--muted); font-size: 11px; flex: 1; }
-  .header-node { color: var(--accent2); font-size: 10px; background: rgba(64,245,200,0.08); padding: 3px 8px; border-radius: 20px; border: 1px solid rgba(64,245,200,0.2); }
+  .header-sub { color: var(--muted); font-size: 10px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .header-node { color: var(--accent2); font-size: 10px; background: rgba(64,245,200,0.08); padding: 3px 8px; border-radius: 20px; border: 1px solid rgba(64,245,200,0.2); white-space: nowrap; flex-shrink: 0; }
+  @media (max-width: 480px) { .header-sub { display: none; } .header-logo { font-size: 13px; } }
 
   .main { display: grid; grid-template-columns: 340px 1fr; flex: 1; height: calc(100vh - 61px); transition: grid-template-columns 0.25s ease; }
   .main.sidebar-closed { grid-template-columns: 0px 1fr; }
@@ -292,6 +295,8 @@ const stripHtml = (html = "") =>
 // ── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [consumerKey, setConsumerKey] = useState(() => localStorage.getItem("okapi_consumer_key") || "");
+  const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("anthropic_api_key") || "");
+  const [anthropicKeySaved, setAnthropicKeySaved] = useState(false);
   const [bbox, setBbox] = useState("52.49,13.36,52.54,13.44");
   const [caches, setCaches] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -308,6 +313,18 @@ export default function App() {
   const [geolocating, setGeolocating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [keySaved, setKeySaved] = useState(false);
+
+  // Persist Anthropic key to localStorage
+  useEffect(() => {
+    if (anthropicKey) {
+      localStorage.setItem("anthropic_api_key", anthropicKey);
+      setAnthropicKeySaved(true);
+      const t = setTimeout(() => setAnthropicKeySaved(false), 1800);
+      return () => clearTimeout(t);
+    } else {
+      localStorage.removeItem("anthropic_api_key");
+    }
+  }, [anthropicKey]);
 
   // Persist consumer key to localStorage
   useEffect(() => {
@@ -420,9 +437,15 @@ export default function App() {
       : "";
 
     try {
+      if (!anthropicKey) { setError("Anthropic API key required to generate fun facts. Add it in the sidebar."); setFactsLoading(false); return; }
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
@@ -437,6 +460,7 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
         })
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
       const text = data.content?.find(b => b.type === "text")?.text || "[]";
       const clean = text.replace(/```json|```/g, "").trim();
       setFacts(JSON.parse(clean));
@@ -515,6 +539,31 @@ Categories can be: FUNNY | UNUSUAL | ADVENTURE | MYSTERY | EMOTIONAL | STATS | Q
               {pingStatus && pingStatus !== "ok" && <div style={{color:"var(--danger)",fontSize:"10px",marginTop:"4px",wordBreak:"break-all"}}>⚠️ {pingStatus}</div>}
               <div className="hint">
                 Free key at <span style={{color:"var(--accent2)"}}>opencaching.de/okapi/signup.html</span>
+              </div>
+            </div>
+
+            {/* Anthropic API Key */}
+            <div className="sidebar-section">
+              <div className="sidebar-label">Anthropic API Key</div>
+              <div className="key-input-wrap" style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                <input
+                  className="key-input"
+                  type="password"
+                  placeholder="sk-ant-…"
+                  value={anthropicKey}
+                  onChange={e => setAnthropicKey(e.target.value)}
+                  style={{flex:1}}
+                />
+                {anthropicKey && (
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => setAnthropicKey("")}
+                    title="Clear" style={{padding:"6px 8px",flexShrink:0}}>✕</button>
+                )}
+              </div>
+              {anthropicKeySaved && <div style={{color:"var(--accent)",fontSize:"10px",marginTop:"4px"}}>✅ Key saved to browser</div>}
+              {!anthropicKeySaved && anthropicKey && <div style={{color:"var(--muted)",fontSize:"10px",marginTop:"4px"}}>🔑 Key loaded from storage</div>}
+              <div className="hint">
+                Get a key at <span style={{color:"var(--accent2)"}}>console.anthropic.com</span>
               </div>
             </div>
 
